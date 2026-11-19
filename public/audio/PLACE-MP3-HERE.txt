@@ -1,0 +1,7 @@
+Place your katana-draw sound effect here, named exactly:
+
+    katana-draw.mp3
+
+Full path: public/audio/katana-draw.mp3
+
+If this file is absent, the site silently skips the sound.
