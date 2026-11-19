@@ -1,16 +1,14 @@
 # ADVAIT SREEKUMAR — Portfolio
 
-Two complete editions driven by the **same data files**:
+Two complete Next.js editions are included and use the **same data files**:
 
 | Route      | Edition                                                        |
 |------------|----------------------------------------------------------------|
 | `/`        | **Forge Edition** — dark cinematic samurai: katana intro with sparks, mechanical nav wheel, ember atmosphere |
 | `/dossier` | **Atelier Dossier** — light paper technical-document: drafting grid, vermilion seals, crosshair cursor, spec-sheet projects |
 
-Both share `src/data/*` content and the same working contact API.
-To make the Dossier the primary site: move `src/app/dossier/page.tsx` +
-`layout.tsx` + `dossier.css` into `src/app/` (replacing the originals) and
-move the forge files into a sub-route.
+Both editions share `src/data/*` content and the same working contact API at
+`src/app/api/contact/route.ts`.
 
 ---
 
@@ -24,24 +22,77 @@ all motion is hand-rolled with CSS transforms, `requestAnimationFrame` and
 
 ---
 
-## 1. Quick start
+## 1. Start work on a new machine
+
+### Requirements
+
+- Node.js 18.17 or newer
+- npm (normally installed with Node.js)
+- Git
+
+### Pull and install
 
 ```bash
+git clone https://github.com/Advait-Sreekumar/Portfolio.git
+cd Portfolio
 npm install
-npm run dev        # http://localhost:3000
 ```
 
-Production:
+If the repository is already cloned, update it before starting:
+
+```bash
+git pull
+npm install
+```
+
+Create the local environment file for contact-form delivery:
+
+```bash
+# macOS / Linux
+cp .env.example .env.local
+
+# Windows PowerShell
+Copy-Item .env.example .env.local
+```
+
+Edit `.env.local` as described in section 3. The contact form does not send
+mail until its SMTP values are configured. The rest of the site can run
+without it.
+
+Start local development:
+
+```bash
+npm run dev
+```
+
+Open <http://localhost:3000> for the Forge Edition or
+<http://localhost:3000/dossier> for the Atelier Dossier.
+
+Stop the server with `Ctrl+C`.
+
+### Optional Windows fix
+
+If a Windows npm script fails with `spawn cmd.exe ENOENT`, configure npm to
+use a 64-bit cmd.exe explicitly:
+
+```powershell
+npm config set script-shell "C:\Windows\System32\cmd.exe"
+```
+
+Remove that setting with:
+
+```powershell
+npm config delete script-shell
+```
+
+### Production build
 
 ```bash
 npm run build
 npm start
 ```
 
-> If `npm run ...` ever fails with "spawn cmd.exe ENOENT", your Windows
-> install is missing 64-bit cmd.exe. This machine is already fixed via:
-> `npm config set script-shell "C:\Windows\SysWOW64\cmd.exe"`
-> (revert with `npm config delete script-shell`).
+The production server listens on port 3000 unless `PORT` is set.
 
 ---
 
@@ -57,16 +108,22 @@ public/audio/katana-draw.mp3     ← exact name, exact folder
 - If the browser blocks autoplay, it fires on the visitor's first click/key.
 - If the file is missing, the site stays silent — no errors, no UI controls.
 
+The placeholder file `public/audio/PLACE-MP3-HERE.txt` documents the path and
+can be deleted after `katana-draw.mp3` is added.
+
 ---
 
 ## 3. Contact form — email setup  ⚠️ IMPORTANT
 
-**MY EMAIL GOES HERE** → edit `.env.local`:
+Copy `.env.example` to `.env.local`, then fill in the values:
 
 ```
-CONTACT_EMAIL=advaitsreekumar01@gmail.com      ← messages arrive in this inbox
-SMTP_USER=advaitsreekumar01@gmail.com          ← your Gmail address (sender)
-SMTP_PASS=YOUR_16_CHAR_GMAIL_APP_PASSWORD      ← API KEY GOES HERE
+CONTACT_EMAIL=your-real-inbox@example.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your-real-inbox@example.com
+SMTP_PASS=your-generated-app-password
 ```
 
 **EMAIL SERVICE SETUP (Gmail):**
@@ -77,7 +134,10 @@ SMTP_PASS=YOUR_16_CHAR_GMAIL_APP_PASSWORD      ← API KEY GOES HERE
 4. Paste the 16-character password into `SMTP_PASS`.
 5. Restart the server (`npm run dev`).
 
-Never commit `.env.local` — it is already git-ignored.
+Never commit `.env.local` or an App Password. `.env.local`, `.env`, and
+`.env*.local` are excluded by `.gitignore`. Use `.env.example` only for
+variable names and safe placeholder values.
+
 Every received message uses the visitor's email as **Reply-To**, so you can
 answer directly. Format:
 
@@ -108,6 +168,9 @@ public/images/portrait.jpg
 It appears in the framed panel beside the contact form. Until then an
 "AS" monogram placeholder shows automatically.
 
+The placeholder file `public/images/PLACE-PORTRAIT-HERE.txt` documents the
+path and can be deleted after `portrait.jpg` is added.
+
 ---
 
 ## 5. Editing content — data files
@@ -129,7 +192,64 @@ Section order & wheel segments are defined together in `src/lib/sections.ts`.
 
 ---
 
-## 6. How the experience works
+## 6. Project structure
+
+```text
+src/app/
+  page.tsx                 # Forge Edition route
+  dossier/page.tsx         # Dossier Edition route
+  api/contact/route.ts     # SMTP contact endpoint
+src/components/           # Shared and edition-specific components
+src/data/                 # Portfolio content
+src/lib/                  # Navigation and interaction helpers
+public/images/            # Portrait and other images
+public/audio/             # Katana-draw audio
+.env.example              # Safe environment-variable template
+.env.local                # Local secrets; never commit
+package-lock.json         # Reproducible npm dependency versions
+```
+
+Prefer editing content in `src/data/`, route-specific markup in
+`src/app/page.tsx` or `src/app/dossier/page.tsx`, and shared behavior in
+`src/components/` or `src/lib/`. Keep assets in `public/` so they are
+served at their `/images/...` or `/audio/...` URLs.
+
+---
+
+## 7. Development workflow
+
+After pulling changes or changing dependencies:
+
+```bash
+npm install
+npm run dev
+```
+
+Before committing or moving to another environment, run:
+
+```bash
+npm run build
+```
+
+ESLint is not configured in this repository yet, so `npm run lint` opens
+Next.js's interactive setup prompt the first time it is run. The production
+build already checks TypeScript and Next.js route validity.
+
+Useful Git checks:
+
+```bash
+git --no-pager status
+git --no-pager diff
+git --no-pager log -5 --oneline
+```
+
+Do not commit `.env.local`, generated `.next/` output, `node_modules/`, or
+App Passwords. `package-lock.json` is committed so `npm install` reproduces
+the current dependency graph.
+
+---
+
+## 8. How the experience works
 
 1. **Intro** — scroll is fully locked (wheel, keys, touch, scrollbar).
    Katana rises → blade draws (with sound) → lock/shake → reflection sweep
@@ -150,7 +270,7 @@ and disables decorative animation.
 
 ---
 
-## 7. Deployment
+## 9. Deployment
 
 Deploys cleanly to Vercel (API route included):
 
