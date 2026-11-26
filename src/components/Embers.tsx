@@ -66,22 +66,36 @@ export default function Embers() {
     const targetCount = Math.max(16, Math.min(42, Math.floor((w * h) / 45000)));
     for (let i = 0; i < targetCount; i++) embers.push(spawn(true));
 
-    let t = 0;
-    const tick = () => {
+    let t = 0, previous = 0;
+    let targetX = 0, targetY = 0, pointerX = 0, pointerY = 0;
+    const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const onPointer = (event: PointerEvent) => {
+      if (!fine.matches || event.pointerType === "touch") return;
+      targetX = (event.clientX / w - .5) * 2;
+      targetY = (event.clientY / h - .5) * 2;
+    };
+    const resetPointer = () => { targetX = 0; targetY = 0; };
+    const tick = (now: number) => {
       if (!running) return;
-      t += 0.008;
+      const dt = previous ? Math.min(50, now - previous) : 16.67;
+      previous = now;
+      const frameScale = dt / 16.67;
+      const blend = 1 - Math.exp(-dt / 45);
+      pointerX += (targetX - pointerX) * blend;
+      pointerY += (targetY - pointerY) * blend;
+      t += 0.008 * frameScale;
       ctx.clearRect(0, 0, w, h);
       ctx.globalCompositeOperation = "lighter";
 
       for (let i = 0; i < embers.length; i++) {
         const e = embers[i];
-        e.life += 0.016;
+        e.life += dt / 1000;
         if (e.life > e.maxLife || e.y < -12) {
           embers[i] = spawn();
           continue;
         }
-        e.x += e.vx + Math.sin(t * 2 + i) * 0.12;
-        e.y += e.vy;
+        e.x += (e.vx + Math.sin(t * 2 + i) * 0.12) * frameScale;
+        e.y += e.vy * frameScale;
 
         const lifeRatio = e.life / e.maxLife;
         const fade =
@@ -95,7 +109,7 @@ export default function Embers() {
         const b = Math.round(warm ? 138 : 46);
 
         ctx.beginPath();
-        ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
+        ctx.arc(e.x + pointerX * 14, e.y + pointerY * 9, e.size, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${r},${g},${b},${(0.5 * fade * flicker).toFixed(3)})`;
         ctx.fill();
       }
@@ -105,16 +119,21 @@ export default function Embers() {
 
     const onVisibility = () => {
       running = !document.hidden;
+      previous = 0;
       if (running) raf = requestAnimationFrame(tick);
       else cancelAnimationFrame(raf);
     };
 
     window.addEventListener("resize", resize);
+    window.addEventListener("pointermove", onPointer, { passive: true });
+    document.addEventListener("pointerleave", resetPointer);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       running = false;
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
+      window.removeEventListener("pointermove", onPointer);
+      document.removeEventListener("pointerleave", resetPointer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [reduced]);

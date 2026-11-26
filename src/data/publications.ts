@@ -5,7 +5,7 @@
  */
 export interface Publication {
   title: string;
-  role: string;
+  role?: string;
   patent?: string;
   note?: string;
   url?: string | null;
@@ -26,7 +26,14 @@ export const publications: Publication[] = [
     note: "Oculomotor screening research for neuropsychiatric applications, published as an Indian patent.",
     url: null,
   },
+  {
+    title: "A SYSTEM AND METHOD FOR SPECIFICITY-CONSTRAINED GENE PANEL DESIGN USING COUNTERFACTUAL NEGATIVE SETS",
+    patent: "Patent",
+  },
 ];
+
+/** Shared count; the second patent's status and dates have not been supplied. */
+export const patentCount = publications.filter((publication) => publication.patent).length;
 
 export const awards: Award[] = [
   {

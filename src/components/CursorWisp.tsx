@@ -2,121 +2,77 @@
 
 import { useEffect, useRef } from "react";
 
-interface Wisp {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  size: number;
-}
-
-/**
- * Ember cursor wisp — the pointer trails tiny brass embers.
- * Desktop fine pointers only; disabled for reduced motion; the loop
- * parks itself whenever there is nothing to draw.
- */
+/** Precise SVG pointer; only its blade animates, never the pointer position. */
 export default function CursorWisp() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches)
-      return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let W = window.innerWidth;
-    let H = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const particles: Wisp[] = [];
+    const cursor = ref.current;
+    if (!cursor) return;
+    const fine = matchMedia("(hover: hover) and (pointer: fine)");
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)");
     let raf = 0;
-    let running = false;
-    let skip = 0;
-
-    const resize = () => {
-      W = window.innerWidth;
-      H = window.innerHeight;
-      canvas.width = Math.floor(W * dpr);
-      canvas.height = Math.floor(H * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    let x = 0;
+    let y = 0;
+    let target: Element | null = null;
+    const hide = () => {
+      cursor.classList.remove("is-visible");
+      document.documentElement.classList.remove("katana-cursor-active");
     };
-    resize();
-
-    const onMove = (e: PointerEvent) => {
-      if (++skip % 2) return; // every other event — keeps density tasteful
-      if (particles.length > 80) particles.shift();
-      particles.push({
-        x: e.clientX + (Math.random() - 0.5) * 6,
-        y: e.clientY + (Math.random() - 0.5) * 6,
-        vx: (Math.random() - 0.5) * 0.7,
-        vy: -(0.35 + Math.random() * 0.75),
-        life: 0,
-        maxLife: 0.4 + Math.random() * 0.3,
-        size: 0.8 + Math.random() * 1.6,
-      });
-      kick();
+    const render = () => {
+      raf = 0;
+      if (!fine.matches || reduced.matches || document.hidden) { hide(); return; }
+      // Recheck after scrolling and layout shifts, including under a stationary pointer.
+      target = document.elementFromPoint(x, y);
+      const editing = target?.closest('input, textarea, [contenteditable="true"], [data-native-cursor]');
+      if (editing) { hide(); return; }
+      cursor.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      cursor.classList.toggle("is-drawn", !!target?.closest('a[href], button:not(:disabled), [role="button"], summary, [data-cursor="pointer"]'));
+      cursor.classList.add("is-visible");
+      document.documentElement.classList.add("katana-cursor-active");
     };
-
-    const step = () => {
-      ctx.clearRect(0, 0, W, H);
-      ctx.globalCompositeOperation = "lighter";
-      const now = performance.now();
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.life += 1 / 60;
-        if (p.life >= p.maxLife) {
-          particles.splice(i, 1);
-          continue;
-        }
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy -= 0.008; // embers drift upward
-        const k = 1 - p.life / p.maxLife;
-        ctx.globalAlpha = k * 0.55;
-        ctx.fillStyle = "#e8c98a";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * k, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = k * 0.18;
-        ctx.fillStyle = "#c65b2e";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 2.6 * k, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      void now;
-
-      if (particles.length === 0) {
-        running = false;
-        return;
-      }
-      raf = requestAnimationFrame(step);
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(render); };
+    const move = (event: PointerEvent) => {
+      if (event.pointerType === "touch") { hide(); return; }
+      x = event.clientX; y = event.clientY;
+      schedule();
     };
-
-    const kick = () => {
-      if (!running) {
-        running = true;
-        raf = requestAnimationFrame(step);
-      }
-    };
-
-    window.addEventListener("pointermove", onMove, { passive: true });
-    window.addEventListener("resize", resize);
+    const leave = () => { cancelAnimationFrame(raf); raf = 0; hide(); };
+    document.addEventListener("pointermove", move, { passive: true });
+    document.addEventListener("pointerover", schedule, { passive: true });
+    document.addEventListener("pointerleave", leave);
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("blur", leave);
+    fine.addEventListener("change", leave);
+    reduced.addEventListener("change", leave);
     return () => {
-      cancelAnimationFrame(raf);
-      running = false;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("resize", resize);
+      leave();
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerover", schedule);
+      document.removeEventListener("pointerleave", leave);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("blur", leave);
+      fine.removeEventListener("change", leave);
+      reduced.removeEventListener("change", leave);
     };
   }, []);
 
-  if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
-    return null;
-
-  return <canvas ref={canvasRef} className="cursor-wisp" aria-hidden="true" />;
+  return (
+    <div className="katana-cursor" ref={ref} aria-hidden="true">
+      <svg viewBox="0 0 64 64" width="42" height="42">
+        <g transform="rotate(-42 30 32)">
+          <g className="cursor-sword">
+            <path d="M11 30H43V34H11L7 32Z" fill="#dce2e7" stroke="#626b74" strokeWidth=".7" />
+            <rect x="43" y="28" width="2.5" height="8" rx="1" fill="#e8c98a" />
+            <path d="M46 30H59V34H46Z" fill="#261114" stroke="#8a6a3e" strokeWidth=".7" />
+            <path d="m48 30 4 4m1-4 4 4m-9 0 4-4m1 4 4-4" stroke="#b2a18c" strokeWidth=".75" />
+            <path d="M59 30V34" stroke="#e8c98a" strokeWidth="2" />
+          </g>
+          <path d="M6 29.5H42V34.5H6Q2 32 6 29.5Z" fill="#101215" stroke="#8a6a3e" strokeWidth="1" />
+          <path d="M40 29.5V34.5" stroke="#e8c98a" strokeWidth="2" />
+          <path d="M8 31H37" stroke="#9aa3ad" strokeOpacity=".25" strokeWidth=".6" />
+        </g>
+        <circle cx="1.5" cy="1.5" r="1.2" fill="#e8c98a" />
+      </svg>
+    </div>
+  );
 }

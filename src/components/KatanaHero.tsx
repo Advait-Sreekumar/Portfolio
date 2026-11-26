@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { lockScroll, unlockScroll } from "@/lib/scrollLock";
 import { useReducedMotion } from "@/lib/useReducedMotion";
+import { useKatanaAudio } from "@/lib/useKatanaAudio";
 import { profile } from "@/data/profile";
 
 /* viewBox geometry (matches the SVG below) */
-const VB_W = 1600;
+const VB_W = 2100;
+const VB_X = -240;
 const VB_H = 900;
 
 /* intro choreography */
@@ -37,6 +39,7 @@ interface SparkBridge {
   emit?: (velocity: number, progress: number) => void;
   burst?: (count: number) => void;
   beginAmbient?: () => void;
+  stopAmbient?: () => void;
 }
 
 /* hot → cool ember palette */
@@ -65,116 +68,10 @@ export default function KatanaHero() {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sparks = useRef<SparkBridge>({});
-  const sounds = useRef<{ playDraw?: () => void; playClink?: () => void }>({});
+  const { muted, toggle: toggleSound, bridge: sounds } = useKatanaAudio();
+  const [replay, setReplay] = useState(0);
+  const [skip, setSkip] = useState(false);
   const reduced = useReducedMotion();
-
-  /* ── sound: MP3 → synthesized fallback → gesture retry ───────────── */
-  useEffect(() => {
-    let mp3Failed = false;
-    let mp3PlayedOnce = false;
-    let audioCtx: AudioContext | null = null;
-
-    const el = new Audio("/audio/katana-draw.mp3");
-    el.preload = "auto";
-    el.volume = 0.7;
-    el.addEventListener("error", () => {
-      mp3Failed = true;
-    });
-
-    const ensureCtx = () => {
-      if (!audioCtx)
-        audioCtx = new (
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext })
-            .webkitAudioContext
-        )();
-    };
-
-    const playSynthWhoosh = () => {
-      try {
-        ensureCtx();
-        const dur = 1.5;
-        const bufferSize = Math.floor(audioCtx!.sampleRate * dur);
-        const buffer = audioCtx!.createBuffer(1, bufferSize, audioCtx!.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++)
-          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 1.5);
-        const noise = audioCtx!.createBufferSource();
-        noise.buffer = buffer;
-        const bp = audioCtx!.createBiquadFilter();
-        bp.type = "bandpass";
-        bp.frequency.setValueAtTime(1200, audioCtx!.currentTime);
-        bp.frequency.linearRampToValueAtTime(3200, audioCtx!.currentTime + dur);
-        bp.Q.value = 0.7;
-        const gain = audioCtx!.createGain();
-        gain.gain.setValueAtTime(0.001, audioCtx!.currentTime);
-        gain.gain.linearRampToValueAtTime(0.22, audioCtx!.currentTime + 0.1);
-        gain.gain.linearRampToValueAtTime(0.0001, audioCtx!.currentTime + dur);
-        noise.connect(bp);
-        bp.connect(gain);
-        gain.connect(audioCtx!.destination);
-        noise.start();
-        noise.stop(audioCtx!.currentTime + dur);
-      } catch {
-        /* best-effort */
-      }
-    };
-
-    const playClink = () => {
-      try {
-        ensureCtx();
-        [1800, 2600].forEach((f, idx) => {
-          const osc = audioCtx!.createOscillator();
-          osc.type = "sine";
-          osc.frequency.value = f;
-          const gain = audioCtx!.createGain();
-          gain.gain.setValueAtTime(0.001, audioCtx!.currentTime);
-          gain.gain.linearRampToValueAtTime(0.12 / (idx + 1), audioCtx!.currentTime + 0.01);
-          gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx!.currentTime + 0.35);
-          osc.connect(gain);
-          gain.connect(audioCtx!.destination);
-          osc.start();
-          osc.stop(audioCtx!.currentTime + 0.4);
-        });
-      } catch {
-        /* best-effort */
-      }
-    };
-
-    const armGestureRetry = () => {
-      const unlock = () => {
-        if (!mp3PlayedOnce && !mp3Failed) {
-          el.currentTime = 0;
-          el.play()
-            .then(() => {
-              mp3PlayedOnce = true;
-            })
-            .catch(() => {});
-        }
-        if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
-      };
-      window.addEventListener("pointerdown", unlock, { once: true });
-      window.addEventListener("keydown", unlock, { once: true });
-    };
-
-    const playDraw = () => {
-      if (mp3Failed) {
-        playSynthWhoosh();
-        armGestureRetry();
-        return;
-      }
-      el.play().catch(() => {
-        playSynthWhoosh();
-        armGestureRetry();
-      });
-    };
-
-    sounds.current = { playDraw, playClink };
-    return () => {
-      el.pause();
-      sounds.current = {};
-    };
-  }, []);
 
   /* ── spark particle engine ──────────────────────────────────────────
    * Tracks the blade-sheath contact point in world space (including the
@@ -208,9 +105,9 @@ export default function KatanaHero() {
       canvas.width = Math.max(1, Math.floor(W * dpr));
       canvas.height = Math.max(1, Math.floor(H * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      scale = Math.max(W / VB_W, H / VB_H); // preserveAspectRatio xMidYMax slice
-      offX = (W - VB_W * scale) / 2;
-      offY = H - VB_H * scale;
+      scale = Math.min(W / VB_W, H / VB_H); // preserveAspectRatio xMidYMid meet
+      offX = (W - VB_W * scale) / 2 - VB_X * scale;
+      offY = (H - VB_H * scale) / 2;
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -396,7 +293,8 @@ export default function KatanaHero() {
         2600 + Math.random() * 1900,
       );
     };
-    sparks.current.beginAmbient = () => ambientTick();
+    sparks.current.beginAmbient = () => { clearTimeout(ambientTimer); ambientTick(); };
+    sparks.current.stopAmbient = () => clearTimeout(ambientTimer);
 
     return () => {
       cancelAnimationFrame(raf);
@@ -411,8 +309,8 @@ export default function KatanaHero() {
     const root = rootRef.current;
     if (!root) return;
 
-    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-    window.scrollTo(0, 0);
+    const anchor = window.location.hash;
+    if (!anchor && replay === 0) window.scrollTo(0, 0);
     lockScroll();
 
     const setVar = (n: string, v: string) => root.style.setProperty(n, v);
@@ -422,14 +320,17 @@ export default function KatanaHero() {
       document.body.dataset.intro = "complete";
       window.dispatchEvent(new Event("kx:nav-ready"));
       unlockScroll();
+      if (anchor && replay === 0) document.getElementById(anchor.slice(1))?.scrollIntoView();
     };
 
-    if (reduced) {
+    sparks.current.stopAmbient?.();
+    if (reduced || skip || (anchor && replay === 0)) {
       root.classList.add("kx-instant");
       reveal();
       return () => unlockScroll();
     }
 
+    root.classList.remove("kx-instant", "kx-lock", "kx-sweeping", "kx-sweep2");
     root.dataset.phase = "boot";
     setVar("--rise-y", `${REST_Y}px`);
     setVar("--draw-x", "0px");
@@ -440,28 +341,31 @@ export default function KatanaHero() {
     let raf = 0;
 
     const startDraw = () => {
-      sounds.current.playDraw?.();
       const start = performance.now();
       let lastEased = 0;
+      let lastTime = start;
 
       const frame = (now: number) => {
         const t = Math.min(1, (now - start) / DRAW_MS);
         const eased = 1 - Math.pow(1 - t, 5); // easeOutQuint
         const dv = eased - lastEased;
         lastEased = eased;
+        const speed = dv / Math.max(0.001, (now - lastTime) / 1000);
+        lastTime = now;
 
         setVar("--rise-y", `${REST_Y + (FINAL_Y - REST_Y) * eased}px`);
         setVar("--draw-x", `${eased * MAX_DRAW}px`);
         setVar("--rise-rot", `${-8.5 + 2.5 * eased}deg`);
         setVar("--streak", Math.min(1, dv * 130).toFixed(3));
         sparks.current.emit?.(dv, eased);
+        sounds.current.update(eased, speed);
 
         if (t < 1) {
           raf = requestAnimationFrame(frame);
         } else {
           setVar("--streak", "0");
           root.classList.add("kx-lock");
-          sounds.current.playClink?.();
+          sounds.current.clink();
           sparks.current.burst?.(48);
           timers.push(
             window.setTimeout(() => root.classList.add("kx-sweeping"), 150),
@@ -481,10 +385,11 @@ export default function KatanaHero() {
     return () => {
       timers.forEach(clearTimeout);
       cancelAnimationFrame(raf);
+      sounds.current.stop();
       unlockScroll();
       delete document.body.dataset.intro;
     };
-  }, [reduced]);
+  }, [reduced, replay, skip, sounds]);
 
   /* ── subtle parallax (fine pointers only) ────────────────────────── */
   useEffect(() => {
@@ -492,28 +397,30 @@ export default function KatanaHero() {
     if (!root || reduced) return;
     if (window.matchMedia("(pointer: coarse)").matches) return;
 
-    let tx = 0;
-    let ty = 0;
-    let cx = 0;
-    let cy = 0;
-    let raf = 0;
-
+    let tx = 0, ty = 0, cx = 0, cy = 0, raf = 0, previous = 0;
+    const loop = (now: number) => {
+      const dt = previous ? Math.min(64, now - previous) : 16.7;
+      previous = now;
+      const blend = 1 - Math.exp(-dt / 45);
+      cx += (tx - cx) * blend;
+      cy += (ty - cy) * blend;
+      root.style.setProperty("--parx", (cx * 13).toFixed(2) + "px");
+      root.style.setProperty("--pary", (cy * 8).toFixed(2) + "px");
+      if (Math.abs(tx - cx) + Math.abs(ty - cy) > 0.001 && !document.hidden) raf = requestAnimationFrame(loop);
+      else { raf = 0; previous = 0; }
+    };
     const onMove = (e: PointerEvent) => {
+      if (e.pointerType === "touch" || root.getBoundingClientRect().bottom <= 0) return;
       tx = (e.clientX / window.innerWidth - 0.5) * 2;
       ty = (e.clientY / window.innerHeight - 0.5) * 2;
+      if (!raf) raf = requestAnimationFrame(loop);
     };
-    const loop = () => {
-      cx += (tx - cx) * 0.06;
-      cy += (ty - cy) * 0.06;
-      root.style.setProperty("--parx", `${(cx * 13).toFixed(2)}px`);
-      root.style.setProperty("--pary", `${(cy * 8).toFixed(2)}px`);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
     window.addEventListener("pointermove", onMove, { passive: true });
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", onMove);
+      root.style.removeProperty("--parx");
+      root.style.removeProperty("--pary");
     };
   }, [reduced]);
 
@@ -551,8 +458,8 @@ export default function KatanaHero() {
         {/* ══════════════════ KATANA ══════════════════ */}
         <svg
           className="kx-svg"
-          viewBox={`0 0 ${VB_W} ${VB_H}`}
-          preserveAspectRatio="xMidYMax slice"
+          viewBox={`${VB_X} 0 ${VB_W} ${VB_H}`}
+          preserveAspectRatio="xMidYMid meet"
           aria-hidden="true"
           focusable="false"
         >
@@ -740,10 +647,10 @@ export default function KatanaHero() {
 
                   {/* tsuka */}
                   <g>
-                    <path d="M 838,-36 L 1080,-30 Q 1092,0 1080,30 L 838,36 Z" fill="url(#kx-handleGrad)" />
-                    <path d="M 838,-36 L 1080,-30 Q 1092,0 1080,30 L 838,36 Z" fill="url(#kx-wrap)" opacity="0.6" />
+                    <path d="M 838,-36 L 1200,-30 Q 1212,0 1200,30 L 838,36 Z" fill="url(#kx-handleGrad)" />
+                    <path d="M 838,-36 L 1200,-30 Q 1212,0 1200,30 L 838,36 Z" fill="url(#kx-wrap)" opacity="0.6" />
                     <path
-                      d="M 838,-36 L 1080,-30 Q 1092,0 1080,30 L 838,36 Z"
+                      d="M 838,-36 L 1200,-30 Q 1212,0 1200,30 L 838,36 Z"
                       fill="none"
                       stroke="rgba(255,255,255,0.06)"
                       strokeWidth="1"
@@ -754,9 +661,13 @@ export default function KatanaHero() {
                     <rect x="1038" y="-6" width="11" height="11" fill="#e8e2d2" opacity="0.8" transform="rotate(45 1043.5 -0.5)" />
                   </g>
 
+                  {/* extra wrap diamonds preserve spacing along the longer tsuka */}
+                  {[1088, 1138, 1188].map((x) => (
+                    <rect key={x} x={x} y="-6" width="11" height="11" fill="#e8e2d2" opacity="0.8" transform={`rotate(45 ${x + 5.5} -0.5)`} />
+                  ))}
                   {/* kashira */}
-                  <ellipse cx="1090" cy="0" rx="18" ry="46" fill="url(#kx-brassGrad)" stroke="#1a1206" strokeWidth="1.5" />
-                  <ellipse cx="1090" cy="0" rx="18" ry="46" fill="url(#kx-filigree)" opacity="0.5" />
+                  <ellipse cx="1210" cy="0" rx="18" ry="46" fill="url(#kx-brassGrad)" stroke="#1a1206" strokeWidth="1.5" />
+                  <ellipse cx="1210" cy="0" rx="18" ry="46" fill="url(#kx-filigree)" opacity="0.5" />
                 </g>
               </g>
             </g>
@@ -766,10 +677,19 @@ export default function KatanaHero() {
 
       {/* ── HERO COPY ── */}
       <div className="hero-copy">
-        <p className="hero-eyebrow">{profile.eyebrow}</p>
-        <h1 className="hero-name">{profile.name}</h1>
+        <h1 className="sr-text">{profile.name}</h1>
         <div className="hero-rule" aria-hidden="true" />
         <p className="hero-role">{profile.role}</p>
+      </div>
+
+      <div className="hero-controls">
+        <button type="button" onClick={toggleSound} aria-pressed={!muted}>{muted ? "Sound off" : "Sound on"}</button>
+        <button type="button" onClick={() => { setSkip(false); setReplay((value) => value + 1); }} disabled={reduced}>Draw again</button>
+        <button type="button" className="intro-skip" onClick={() => {
+          setSkip(true);
+          document.getElementById("experience")?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+          unlockScroll();
+        }}>Skip intro</button>
       </div>
 
       <div className="scroll-hint" aria-hidden="true">

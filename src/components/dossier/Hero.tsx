@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { profile } from "@/data/profile";
 import { experience } from "@/data/experience";
+import { patentCount } from "@/data/publications";
 
 /**
  * Dossier hero — the document draws itself in: ruled paper, name wipes,
@@ -96,7 +97,7 @@ export default function Hero() {
         </div>
         <div>
           <dt className="d-mono">Papers</dt>
-          <dd>1 Patent · 1 Publication · Hackathon Winner</dd>
+          <dd>{patentCount} Patents · 1 Publication · Hackathon Winner</dd>
         </div>
       </dl>
 

@@ -3,6 +3,8 @@
  *  WORK EXPERIENCE — sourced from Advait's resume.
  * ─────────────────────────────────────────────────────────────
  */
+import { patentCount } from "./publications";
+
 export interface Experience {
   position: string;
   company: string;
@@ -24,7 +26,7 @@ export const experience: Experience[] = [
     description:
       "Researching early detection of neuroscience disorders using computer vision and machine learning.",
     points: [
-      "Patent published: 1",
+      `Patents: ${patentCount}`,
       "Maintenance of the TSRS website",
     ],
   },

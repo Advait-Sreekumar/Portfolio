@@ -3,7 +3,8 @@
 import { useRef, useState, type FormEvent } from "react";
 import Section from "@/components/Section";
 import Magnetic from "@/components/Magnetic";
-import { profile } from "@/data/profile";
+import { socials } from "@/data/socials";
+import { SocialIcon } from "@/components/Icons";
 
 type FormStatus = "idle" | "sending" | "success" | "error";
 
@@ -16,7 +17,6 @@ const BUTTON_LABEL: Record<FormStatus, string> = {
 
 export default function ContactSection() {
   const [status, setStatus] = useState<FormStatus>("idle");
-  const [portraitOk, setPortraitOk] = useState(true);
   const formRef = useRef<HTMLFormElement>(null);
   const statusRef = useRef<HTMLParagraphElement>(null);
 
@@ -60,34 +60,19 @@ export default function ContactSection() {
       id="contact"
       numeral="VII"
       title="Contact Me"
-      lead="Open a channel."
+      lead="Every good collaboration starts with a conversation."
     >
       <div className="contact-grid">
-        {/* ── portrait panel ─────────────────────────────────── */}
-        <aside className="contact-portrait rv rv-2" aria-label="Portrait">
-          <div className="portrait-frame">
-            <span className="corner c-tl" aria-hidden="true" />
-            <span className="corner c-tr" aria-hidden="true" />
-            <span className="corner c-bl" aria-hidden="true" />
-            <span className="corner c-br" aria-hidden="true" />
-            {portraitOk ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={profile.portrait}
-                alt={`Portrait of ${profile.name}`}
-                onError={() => setPortraitOk(false)}
-              />
-            ) : (
-              <div className="portrait-fallback">
-                <span className="monogram">AS</span>
-                <p>
-                  Portrait placeholder — add your photo at
-                  <code> public/images/portrait.jpg</code>
-                </p>
-              </div>
-            )}
+        <aside className="contact-details rv rv-2" aria-label="Contact details">
+          <p className="contact-invitation">Let&rsquo;s make<br /><em>something matter.</em></p>
+          <p className="contact-note">Research, engineering, or a new idea — I&rsquo;d love to hear what you&rsquo;re working on.</p>
+          <div className="contact-socials" aria-label="Social links">
+            {socials.map((social) => (
+              <a key={social.url} href={social.url} target="_blank" rel="noopener noreferrer">
+                <SocialIcon name={social.icon} size={18} />{social.label}
+              </a>
+            ))}
           </div>
-          <p className="portrait-caption">{profile.name}</p>
         </aside>
 
         {/* ── form ───────────────────────────────────────────── */}

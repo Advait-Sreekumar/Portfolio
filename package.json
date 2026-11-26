@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "certificates": "node scripts/sync-certificates.mjs",
+    "predev": "npm run certificates",
     "dev": "next dev",
+    "prebuild": "npm run certificates",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "next": "^14.2.15",

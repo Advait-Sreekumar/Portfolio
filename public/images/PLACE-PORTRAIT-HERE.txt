@@ -1,8 +1,0 @@
-Place your portrait photo here, named exactly:
-
-    portrait.jpg
-
-Full path: public/images/portrait.jpg
-
-Until you add it, the contact section shows an engraved "AS" monogram
-placeholder frame automatically.

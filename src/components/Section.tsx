@@ -19,6 +19,7 @@ function SplitWords({ text }: { text: string }) {
       {text.split(" ").map((w, i) => (
         <span className="w" key={`${w}-${i}`} aria-hidden="true">
           <span style={{ "--wi": i } as React.CSSProperties}>{w}</span>
+          {i < text.split(" ").length - 1 ? "\u00a0" : ""}
         </span>
       ))}
     </>
@@ -52,7 +53,7 @@ export default function Section({ id, numeral, title, lead, children }: SectionP
           }
         }
       },
-      { threshold: 0.16 },
+      { threshold: 0, rootMargin: "0px 0px -12% 0px" },
     );
     io.observe(el);
     return () => io.disconnect();

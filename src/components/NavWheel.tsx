@@ -1,251 +1,103 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { SECTIONS } from "@/lib/sections";
+import { useActiveSection } from "@/lib/useActiveSection";
 import { SectionIcon } from "@/components/Icons";
 import { useReducedMotion } from "@/lib/useReducedMotion";
 
 const STEP = 360 / SECTIONS.length;
-/** the wheel slot that faces into the viewport (9 o'clock) */
 const ACTIVE_ANGLE = -90;
-/** ms between accepted wheel ticks over the dial */
-const TICK_COOLDOWN = 190;
-
-function nearestEquivalent(target: number, current: number): number {
-  const d = (((target - current) % 360) + 540) % 360 - 180;
-  return current + d;
+function nearestEquivalent(target: number, current: number) {
+  return current + (((target - current) % 360 + 540) % 360 - 180);
 }
 
-/**
- * Mechanical circular navigation wheel.
- *
- * Idle: rotation is driven by page scroll — the section on screen is the
- * source of truth. Hovered/expanded: scrolling OVER the dial rotates it
- * one segment per tick (page does not move — wheel events are captured);
- * clicking a segment commits navigation. Leaving the dial never resets
- * its logical position; it simply returns to mirroring the page.
- */
 export default function NavWheel() {
   const [ready, setReady] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-  /** which segment the user has dialled to while hovering (null = idle) */
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-
-  const discRef = useRef<HTMLDivElement>(null);
-  const navRef = useRef<HTMLElement>(null);
-  const frameRef = useRef<HTMLDivElement>(null);
-  const rot = useRef({ target: ACTIVE_ANGLE, current: ACTIVE_ANGLE, raf: 0 });
-  const centers = useRef<number[]>([]);
-  const lastProgress = useRef(0);
-  const hoverRef = useRef<number | null>(null);
-  const activeRef = useRef(0);
+  const [preview, setPreview] = useState<number | null>(null);
+  const activeIndex = useActiveSection();
   const reduced = useReducedMotion();
+  const shownIndex = preview ?? activeIndex;
+  const discRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const dockRef = useRef<HTMLButtonElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const rotation = useRef(ACTIVE_ANGLE);
+  const frozen = useRef<number | null>(null);
 
-  hoverRef.current = hoverIndex;
-  activeRef.current = activeIndex;
-
-  /* ── measure section centers ────────────────────────────────── */
-  const measure = useCallback(() => {
-    centers.current = SECTIONS.map((s) => {
-      const el = document.getElementById(s.id);
-      if (!el) return 0;
-      const rect = el.getBoundingClientRect();
-      return rect.top + window.scrollY + rect.height / 2;
-    });
+  useEffect(() => {
+    const show = () => setReady(true);
+    if (document.body.dataset.intro === "complete") show();
+    window.addEventListener("kx:nav-ready", show);
+    return () => window.removeEventListener("kx:nav-ready", show);
   }, []);
 
-  /* ── page position → continuous progress ───────────────────── */
-  const updateFromScroll = useCallback(() => {
-    if (!centers.current.length) return;
-    const anchor = window.scrollY + window.innerHeight * 0.45;
-    const c = centers.current;
-    let p: number;
-
-    if (anchor <= c[0]) p = 0;
-    else if (anchor >= c[c.length - 1]) p = c.length - 1;
-    else {
-      let i = 0;
-      while (i < c.length - 2 && anchor >= c[i + 1]) i++;
-      p = i + (anchor - c[i]) / (c[i + 1] - c[i]);
-    }
-
-    lastProgress.current = p;
-    if (hoverRef.current === null) {
-      rot.current.target = nearestEquivalent(ACTIVE_ANGLE - p * STEP, rot.current.current);
-    }
-
-    const idx = Math.max(0, Math.min(SECTIONS.length - 1, Math.round(p)));
-    setActiveIndex((prev) => (prev === idx ? prev : idx));
-  }, []);
-
-  /* ── interpolation loop (runs only while settling) ──────────── */
-  const tick = useCallback(() => {
-    const r = rot.current;
-    const diff = r.target - r.current;
-    if (Math.abs(diff) < 0.02) {
-      r.current = r.target;
-    } else {
-      r.current += diff * (reduced ? 1 : 0.11);
-      r.raf = requestAnimationFrame(tick);
-    }
-    discRef.current?.style.setProperty("--rot", r.current.toFixed(3));
-    // tick ring counter-rotates at a fraction of the dial speed — mechanical parallax
-    frameRef.current?.style.setProperty(
-      "--tick",
-      (r.current * 0.32).toFixed(3),
-    );
-  }, [reduced]);
-
-  const kickLoop = useCallback(() => {
-    cancelAnimationFrame(rot.current.raf);
-    rot.current.raf = requestAnimationFrame(tick);
-  }, [tick]);
-
   useEffect(() => {
-    const onSettled = () => {
-      measure();
-      updateFromScroll();
-      kickLoop();
-    };
-
-    measure();
-    updateFromScroll();
-    discRef.current?.style.setProperty("--rot", rot.current.current.toFixed(3));
-
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        updateFromScroll();
-        // while dialling we keep the page-driven target frozen
-        if (hoverRef.current === null && Math.abs(rot.current.target - rot.current.current) > 0.05)
-          kickLoop();
-        ticking = false;
-      });
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onSettled);
-    window.addEventListener("load", onSettled);
-    const t = window.setTimeout(onSettled, 1200);
-
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onSettled);
-      window.removeEventListener("load", onSettled);
-      clearTimeout(t);
-      cancelAnimationFrame(rot.current.raf);
-    };
-  }, [measure, updateFromScroll, kickLoop]);
-
-  /* ── dialling: rotate target follows hover selection ────────── */
-  useEffect(() => {
-    if (hoverIndex === null) {
-      rot.current.target = nearestEquivalent(
-        ACTIVE_ANGLE - lastProgress.current * STEP,
-        rot.current.current,
-      );
-    } else {
-      rot.current.target = nearestEquivalent(
-        ACTIVE_ANGLE - hoverIndex * STEP,
-        rot.current.current,
-      );
-    }
-    kickLoop();
-  }, [hoverIndex, activeIndex, kickLoop]);
-
-  /* ── scroll-over-the-wheel rotates the dial, not the page ───── */
-  useEffect(() => {
-    if (isMobile || !ready) return;
-    const el = navRef.current;
-    if (!el) return;
-    let cooling = false;
-
-    const onWheelEvt = (e: WheelEvent) => {
-      e.preventDefault(); // page must not move while dialling
-      if (cooling) return;
-      cooling = true;
-      window.setTimeout(() => {
-        cooling = false;
-      }, TICK_COOLDOWN);
-      const dir = e.deltaY > 0 ? 1 : -1;
-      setHoverIndex((prev) => {
-        const base = prev === null ? activeRef.current : prev;
-        return (base + dir + SECTIONS.length) % SECTIONS.length;
-      });
-    };
-
-    el.addEventListener("wheel", onWheelEvt, { passive: false });
-    return () => el.removeEventListener("wheel", onWheelEvt);
-  }, [isMobile, ready]);
-
-  /* ── appear after the katana intro (with a mechanical spin-up) ── */
-  useEffect(() => {
-    const show = () => {
-      if (!ready) {
-        rot.current.current -= 260; // one dramatic sweep into position
-        kickLoop();
-      }
-      setReady(true);
-    };
-    window.addEventListener("kx:nav-ready", show, { once: true });
-    const t = window.setTimeout(() => {
-      const s = document.body.dataset.intro;
-      if (s === "complete" || s === "nav") show();
-    }, 600);
-    return () => {
-      window.removeEventListener("kx:nav-ready", show);
-      clearTimeout(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* ── responsive mode ────────────────────────────────────────── */
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 900px)");
-    const apply = () => setIsMobile(mq.matches);
+    const mq = matchMedia("(max-width: 1100px), (pointer: coarse)");
+    const apply = () => { setIsMobile(mq.matches); setMobileOpen(false); };
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, []);
 
-  /* ── mobile overlay focus & escape handling ─────────────────── */
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const dockRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    // Freeze page-driven wheel motion under the pointer; manual scrolling still works.
+    if (expanded && frozen.current === null) frozen.current = activeIndex;
+    if (!expanded) frozen.current = null;
+    const index = preview ?? frozen.current ?? activeIndex;
+    const target = nearestEquivalent(ACTIVE_ANGLE - index * STEP, rotation.current);
+    let raf = 0, previous = 0;
+    const frame = (now: number) => {
+      const blend = reduced ? 1 : 1 - Math.exp(-(previous ? Math.min(64, now - previous) : 16.7) / 75);
+      previous = now;
+      rotation.current += (target - rotation.current) * blend;
+      if (Math.abs(target - rotation.current) < 0.02) rotation.current = target;
+      discRef.current?.style.setProperty("--rot", String(rotation.current));
+      frameRef.current?.style.setProperty("--tick", String(rotation.current * 0.32));
+      if (rotation.current !== target) raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [activeIndex, preview, reduced, expanded, isMobile, ready]);
+
   useEffect(() => {
     if (!mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
+    const dialog = overlayRef.current;
+    if (!dialog) return;
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+      if (event.key !== "Tab") return;
+      const buttons = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button"));
+      const first = buttons[0], last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     };
-    window.addEventListener("keydown", onKey);
-    overlayRef.current?.querySelector<HTMLElement>("button")?.focus();
+    dialog.querySelector<HTMLButtonElement>("button")?.focus();
+    document.addEventListener("keydown", key);
     return () => {
-      window.removeEventListener("keydown", onKey);
-      dockRef.current?.focus();
+      document.documentElement.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", key);
+      dockRef.current?.focus({ preventScroll: true });
     };
   }, [mobileOpen]);
 
-  /* ── navigation ─────────────────────────────────────────────── */
-  const goTo = useCallback(
-    (id: string, index: number) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      setActiveIndex(index);
-      setHoverIndex(index); // stays consistent until the mouse leaves
-      if (isMobile) setMobileOpen(false);
-      el.scrollIntoView({
-        behavior: reduced ? "auto" : "smooth",
-        block: "start",
-      });
-    },
-    [isMobile, reduced],
-  );
-
-  const shownIndex = hoverIndex ?? activeIndex;
+  const goTo = useCallback((id: string) => {
+    const element = document.getElementById(id);
+    if (!element) return;
+    // Restore the scrollbar and responsive layout before measuring the destination.
+    flushSync(() => setMobileOpen(false));
+    // Native scrolling replaces an in-flight scroll on rapid clicks; measure the target live.
+    const offset = parseFloat(getComputedStyle(element).scrollMarginTop) || 0;
+    window.scrollTo({ top: Math.max(0, element.getBoundingClientRect().top + window.scrollY - offset), behavior: reduced ? "auto" : "smooth" });
+    history.replaceState(null, "", "#" + id);
+  }, [reduced]);
 
   /* ── shared wheel markup ────────────────────────────────────── */
   const renderWheel = () => (
@@ -313,7 +165,8 @@ export default function NavWheel() {
                   style={{ "--ia": angle } as React.CSSProperties}
                   aria-label={`${s.fullLabel}${isCurrent ? " (current section)" : ""}`}
                   aria-current={isCurrent ? "location" : undefined}
-                  onClick={() => goTo(s.id, i)}
+                  onClick={() => goTo(s.id)}
+                  onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) setPreview(i); }}
                 >
                   <span className="nw-btn-icon">
                     <SectionIcon name={s.icon} size={22} />
@@ -362,7 +215,14 @@ export default function NavWheel() {
             if (e.target === e.currentTarget) setMobileOpen(false);
           }}
         >
-          {renderWheel()}
+          <div className="nw-mobile-menu">
+            <div className="nw-menu-head"><p>Choose a chapter</p><button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation">Close</button></div>
+            <ul>{SECTIONS.map((section, index) => <li key={section.id}>
+              <button type="button" aria-current={activeIndex === index ? "location" : undefined} onClick={() => goTo(section.id)}>
+                <span className="nw-menu-seal">{section.numeral}</span><SectionIcon name={section.icon} size={20} /><span>{section.fullLabel}</span>
+              </button>
+            </li>)}</ul>
+          </div>
         </div>
       ) : null}
 
@@ -378,17 +238,21 @@ export default function NavWheel() {
           onMouseEnter={() => setExpanded(true)}
           onMouseLeave={() => {
             setExpanded(false);
-            setHoverIndex(null); // expansion only — page truth resumes
+            setPreview(null);
           }}
           onFocus={() => setExpanded(true)}
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node)) {
               setExpanded(false);
-              setHoverIndex(null);
+              setPreview(null);
             }
           }}
         >
           {renderWheel()}
+          <div className="nw-dial-controls">
+            <button type="button" aria-label="Previous navigation item" onClick={() => setPreview(((preview ?? activeIndex) - 1 + SECTIONS.length) % SECTIONS.length)}>Prev</button>
+            <button type="button" aria-label="Next navigation item" onClick={() => setPreview(((preview ?? activeIndex) + 1) % SECTIONS.length)}>Next</button>
+          </div>
         </nav>
       ) : null}
     </>

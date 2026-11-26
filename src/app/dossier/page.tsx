@@ -3,7 +3,6 @@ import Link from "next/link";
 import Hero from "@/components/dossier/Hero";
 import Crosshair from "@/components/dossier/Crosshair";
 import ContactForm from "@/components/dossier/ContactForm";
-import PortraitFigure from "@/components/dossier/PortraitFigure";
 import Reveal from "@/components/dossier/Reveal";
 import { RailNav, ChapterBar } from "@/components/dossier/RailNav";
 import { SECTIONS } from "@/lib/sections";
@@ -282,7 +281,10 @@ export default function DossierPage() {
               <ContactForm />
             </Reveal>
             <Reveal delay={100}>
-              <PortraitFigure />
+              <aside className="d-contact-details">
+                <h3>Start a conversation.</h3>
+                {socials.map((social) => <p key={social.url}><a href={social.url} target="_blank" rel="noopener noreferrer">{social.label}</a></p>)}
+              </aside>
             </Reveal>
           </div>
         </section>

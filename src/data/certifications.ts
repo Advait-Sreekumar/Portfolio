@@ -1,25 +1,14 @@
-/**
- * ─────────────────────────────────────────────────────────────
- *  CERTIFICATIONS — none are listed on the current resume.
- *
- *  To add one later, append an entry:
- *  {
- *    name: "Certification Name",
- *    issuer: "Issuing Organization",
- *    date: "2026",
- *    image: "/images/cert-xyz.jpg",   // optional — elegant framed display
- *    verifyUrl: "https://…",          // optional verification link
- *  }
- *
- *  The section renders automatically once entries exist.
- * ─────────────────────────────────────────────────────────────
- */
+import assets from "./certificates.generated.json";
+
+/** Discovered from the certificates folder by scripts/sync-certificates.mjs. */
 export interface Certification {
   name: string;
-  issuer: string;
-  date?: string;
+  fileName: string;
+  format: string;
   image?: string;
-  verifyUrl?: string;
+  verifyUrl: string;
+  issuer?: string;
+  date?: string;
 }
 
-export const certifications: Certification[] = [];
+export const certifications: Certification[] = assets;

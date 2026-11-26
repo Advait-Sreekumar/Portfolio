@@ -1,12 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Cinzel, Cormorant_Garamond } from "next/font/google";
+import { Cormorant_Garamond } from "next/font/google";
+import localFont from "next/font/local";
 import { profile } from "@/data/profile";
 import "./globals.css";
 
-const cinzel = Cinzel({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-display",
+const cinzel = localFont({
+  src: [
+    { path: "../../public/fonts/cinzel-400.ttf", weight: "400", style: "normal" },
+    { path: "../../public/fonts/cinzel-500.ttf", weight: "500", style: "normal" },
+    { path: "../../public/fonts/cinzel-600.ttf", weight: "600", style: "normal" },
+    { path: "../../public/fonts/cinzel-700.ttf", weight: "700", style: "normal" },
+  ],
+  variable: "--font-cinzel",
   display: "swap",
 });
 
@@ -14,7 +19,7 @@ const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600"],
   style: ["normal", "italic"],
-  variable: "--font-body",
+  variable: "--font-cormorant",
   display: "swap",
 });
 

@@ -27,31 +27,25 @@ export default function SkillsSection() {
         <h3 className="cert-heading">Certifications</h3>
         {certifications.length === 0 ? (
           <p className="cert-empty">
-            No certifications listed on the current resume — this section
-            updates automatically when they are added.
+            Certificates will appear here as they become available.
           </p>
         ) : (
           <ul className="cert-list">
             {certifications.map((c) => (
-              <li className="cert-card" key={c.name}>
+              <li key={c.verifyUrl}>
+                <a className="cert-card" href={c.verifyUrl} target="_blank" rel="noreferrer noopener" aria-label={`Open ${c.name} (${c.format}, new tab)`}>
                 {c.image ? (
                   <figure className="cert-figure">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={c.image} alt={`${c.name} certificate`} loading="lazy" />
+                    <img src={c.image} alt={`${c.name} certificate preview`} loading="lazy" width={1000} height={750} />
                   </figure>
-                ) : null}
+                ) : <span className="cert-file" aria-hidden="true">{c.format}</span>}
                 <div>
                   <h4>{c.name}</h4>
-                  <p>
-                    {c.issuer}
-                    {c.date ? ` — ${c.date}` : ""}
-                  </p>
-                  {c.verifyUrl ? (
-                    <a href={c.verifyUrl} target="_blank" rel="noreferrer noopener">
-                      Verify certificate
-                    </a>
-                  ) : null}
+                  <p>{c.format} document</p>
+                  <span className="cert-open">View certificate</span>
                 </div>
+                </a>
               </li>
             ))}
           </ul>

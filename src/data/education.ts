@@ -5,6 +5,7 @@
  */
 export interface Education {
   institution: string;
+  abbreviation: string;
   degree: string;
   field: string;
   duration: string;
@@ -14,6 +15,7 @@ export interface Education {
 export const education: Education[] = [
   {
     institution: "Keshav Memorial Engineering College",
+    abbreviation: "KMEC",
     degree: "Bachelor of Engineering",
     field: "Computer Science",
     duration: "September 2024 — July 2028",
@@ -21,6 +23,7 @@ export const education: Education[] = [
   },
   {
     institution: "Indian Institute of Technology, Madras",
+    abbreviation: "IITM",
     degree: "Bachelor of Science",
     field: "Data Science and Programming",
     duration: "December 2024 — July 2027",

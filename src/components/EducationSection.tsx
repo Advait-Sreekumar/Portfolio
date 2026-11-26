@@ -13,12 +13,7 @@ export default function EducationSection() {
         {education.map((ed, i) => (
           <article className={`edu-card rv rv-${i + 2}`} key={ed.institution}>
             <span className="edu-crest" aria-hidden="true">
-              {ed.institution
-                .split(" ")
-                .filter((w) => /^[A-Z]/.test(w))
-                .slice(0, 3)
-                .map((w) => w[0])
-                .join("")}
+              {ed.abbreviation}
             </span>
             <h3 className="edu-institution">{ed.institution}</h3>
             <p className="edu-degree">

@@ -1,5 +1,5 @@
 import Section from "@/components/Section";
-import { publications, awards } from "@/data/publications";
+import { publications, awards, patentCount } from "@/data/publications";
 
 export default function PublicationsSection() {
   return (
@@ -10,10 +10,11 @@ export default function PublicationsSection() {
       lead="Research set to paper, recognition earned in the field."
     >
       <div className="pub-list">
+        <p className="patent-count rv rv-1"><strong>{patentCount}</strong> Patents</p>
         {publications.map((pub, i) => (
           <article className={`pub-card rv rv-${i + 2}`} key={pub.title}>
             <div className="pub-badges">
-              <span className="badge badge-brass">{pub.role}</span>
+              {pub.role ? <span className="badge badge-brass">{pub.role}</span> : null}
               {pub.patent ? (
                 <span className="badge badge-ember">{pub.patent}</span>
               ) : null}

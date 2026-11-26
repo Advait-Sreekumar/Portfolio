@@ -1,41 +1,28 @@
 "use client";
 
 import { useEffect } from "react";
+import { useReducedMotion } from "@/lib/useReducedMotion";
 
-/**
- * Scroll-velocity inertia: leans section content against scroll speed,
- * giving the whole page physical weight. Compositor-only (one custom
- * property, transforms downstream). Disabled for reduced motion.
- */
+/** Scroll inertia settles and parks; touch and reduced-motion views stay still. */
 export default function MotionLayer() {
+  const reduced = useReducedMotion();
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const root = document.documentElement;
-
-    let last = window.scrollY;
-    let vel = 0;
-    let raf = 0;
-    let engaged = false;
-
-    const loop = () => {
+    if (reduced || matchMedia("(pointer: coarse)").matches) { root.style.removeProperty("--skew"); return; }
+    let last = window.scrollY, velocity = 0, raf = 0;
+    const frame = () => {
       const y = window.scrollY;
-      const d = y - last;
+      const delta = y - last;
       last = y;
-      vel += (d - vel) * 0.1;
-
-      const skew = Math.max(-1.3, Math.min(1.3, -vel * 0.05));
-      if (Math.abs(skew) > 0.04) {
-        root.style.setProperty("--skew", `${skew.toFixed(3)}deg`);
-        engaged = true;
-      } else if (engaged) {
-        root.style.setProperty("--skew", "0deg");
-        engaged = false;
-      }
-      raf = requestAnimationFrame(loop);
+      velocity += (delta - velocity) * .2;
+      const skew = Math.max(-1.3, Math.min(1.3, -velocity * .05));
+      root.style.setProperty("--skew", Math.abs(skew) > .04 ? `${skew.toFixed(3)}deg` : "0deg");
+      if (Math.abs(velocity) > .1 || delta !== 0) raf = requestAnimationFrame(frame);
+      else raf = 0;
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
+    const start = () => { if (!raf && !document.hidden) raf = requestAnimationFrame(frame); };
+    window.addEventListener("scroll", start, { passive: true });
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("scroll", start); root.style.removeProperty("--skew"); };
+  }, [reduced]);
   return null;
 }
